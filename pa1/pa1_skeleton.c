@@ -72,7 +72,6 @@ static int send_all(int fd, const void *buf, size_t len) {
         }
         if (n == -1 && errno == EINTR) continue;
         if (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            /* With 16B payloads, short-term backpressure is rare; spin. */
             continue;
         }
         return -1;
@@ -86,12 +85,9 @@ static int send_all(int fd, const void *buf, size_t len) {
 void *client_thread_func(void *arg) {
     client_thread_data_t *data = (client_thread_data_t *)arg;
     struct epoll_event event, events[MAX_EVENTS];
-    char send_buf[MESSAGE_SIZE] = "ABCDEFGHIJKMLNOP"; /* Send 16-Bytes message every time */
+    char send_buf[MESSAGE_SIZE] = "ABCDEFGHIJKMLNOP";
     char recv_buf[MESSAGE_SIZE];
     struct timeval start, end;
-
-    // Hint 1: register the "connected" client_thread's socket in the its epoll instance
-    // Hint 2: use gettimeofday() and "struct timeval start, end" to record timestamp, which can be used to calculated RTT.
 
     memset(&event, 0, sizeof(event));
     event.events = EPOLLIN | EPOLLRDHUP;
@@ -136,7 +132,6 @@ void *client_thread_func(void *arg) {
                     if (r <= 0) {
                         goto done;
                     }
-                    /* Fixed-size echo. */
                     size_t recvd = (size_t)r;
                     while (recvd < MESSAGE_SIZE) {
                         r = recv(data->socket_fd, recv_buf + recvd, MESSAGE_SIZE - recvd, 0);
@@ -187,11 +182,6 @@ void run_client() {
     long total_messages = 0;
     float total_request_rate = 0.0f;
 
-    /* TODO:
-     * Create sockets and epoll instances for client threads
-     * and connect these sockets of client threads to the server
-     */
-
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(server_port);
@@ -232,16 +222,10 @@ void run_client() {
         thread_data[i].total_messages = 0;
         thread_data[i].request_rate = 0.0f;
     }
-    
-    // Hint: use thread_data to save the created socket and epoll instance for each thread
-    // You will pass the thread_data to pthread_create() as below
+
     for (int i = 0; i < num_client_threads; i++) {
         pthread_create(&threads[i], NULL, client_thread_func, &thread_data[i]);
     }
-
-    /* TODO:
-     * Wait for client threads to complete and aggregate metrics of all client threads
-     */
 
     for (int i = 0; i < num_client_threads; i++) {
         pthread_join(threads[i], NULL);
@@ -273,11 +257,6 @@ void run_server() {
     int epoll_fd = -1;
     struct sockaddr_in addr;
     struct epoll_event ev, events[MAX_EVENTS];
-
-    /* TODO:
-     * Server creates listening socket and epoll instance.
-     * Server registers the listening socket to epoll
-     */
 
     listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd == -1) {
@@ -338,10 +317,6 @@ void run_server() {
 
     /* Server's run-to-completion event loop */
     while (1) {
-        /* TODO:
-         * Server uses epoll to handle connection establishment with clients
-         * or receive the message from clients and echo the message back
-         */
 
         int nready = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         if (nready == -1) {
